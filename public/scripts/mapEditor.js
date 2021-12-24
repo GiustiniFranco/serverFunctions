@@ -51,10 +51,15 @@ async function LoadPieces(){
         yin.type = "number";
         yin.value = newPiece.y;
         document.body.appendChild(yin);
+
+        document.write(" name:");
+        let namein = document.createElement("input");
+        namein.value = newPiece.name;
+        document.body.appendChild(namein);
         
         let saveButton = document.createElement("button");
         saveButton.innerHTML = "save piece";
-        saveButton.onclick = () => SavePiece(newPiece, typein.value, xin.value, yin.value);
+        saveButton.onclick = () => SavePiece(newPiece, typein.value, xin.value, yin.value, namein.value);
         document.body.appendChild(saveButton);
         
         document.write("<br>");
@@ -87,7 +92,7 @@ async function DeletePiece(piece){
     LoadPieces();
 }
 
-async function SavePiece(piece, type, x, y){
+async function SavePiece(piece, type, x, y, name){
     document.body.innerHTML = "loading...";
     const response = await fetch('/.netlify/functions/editPiece',
     {
@@ -96,7 +101,8 @@ async function SavePiece(piece, type, x, y){
             ref: piece.id,
             pieceType: parseInt(type),
             x: parseInt(x),
-            y: parseInt(y)
+            y: parseInt(y),
+            name: name
         })
     }).then(
         response => response.json()

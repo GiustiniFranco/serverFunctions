@@ -4,11 +4,12 @@ function Init(){
         Start();
     })
 }
+
 async function Start(){
     let app = new PIXI.Application({
         width: window.innerWidth,
         height: window.innerHeight,
-        resolution: devicePixelRatio 
+        resolution: 1
     });
     document.body.appendChild(app.view);
     
@@ -32,23 +33,34 @@ async function Start(){
         response => response.json()
     );
     CreatePieces(response.data, container, mapScale);
-        
-  /*  const fetchBtn = document.getElementById('fetch-btn')
-    const responseText = document.getElementById('response-output')
 
-    const sendBtn = document.getElementById('send-btn')
-    const nameInput = document.getElementById('nameInput')
-    sendBtn.addEventListener('click', async()=>{
-        const response = await fetch('.netlify/functions/saveData', {
-        method: 'POST',
-        body: JSON.stringify({
-            name: nameInput.value
-        })
-        }).then(
-        response => response.json()
-        )
-        responseText.innerText = response.message
-    })*/
+    const coordinatesLabel = new PIXI.Text('This is a PixiJS text',{fontFamily : 'Arial', fontSize: 18, fill : 0xeeeeee, align : 'center'});
+    coordinatesLabel.anchor.x = 0.5;
+    const labelCont = new PIXI.Container();
+    let labelBG = PIXI.Sprite.from('labelBG.png');
+    labelBG.anchor.x = 0.5;
+    labelCont.addChild(labelBG);
+    labelCont.addChild(coordinatesLabel);
+    app.stage.addChild(labelCont);
+
+    app.stage.interactive = true;
+    app.stage.on("pointermove", (e) => UpdateText(e, app, bg, coordinatesLabel, labelCont, labelBG));
+}
+
+function UpdateText(e, app, bg, label, cont, labelBG){
+    let x = Math.round((e.data.global.x - app.screen.width / 2 + bg.width / 2) * 32 / bg.width);
+    let y = (e.data.global.y - app.screen.height / 2 + bg.height / 2) * 27.5 / bg.height;
+
+    if(x % 2 != 0){
+        y -= 0.5;
+    }
+    y = Math.round(y);
+    label.text = "(" + x + "; " + y + ")";
+
+    cont.x = e.data.global.x;
+    cont.y = e.data.global.y - 35;
+    labelBG.width = label.width;
+    labelBG.height = label.height;
 }
 
 function CreatePieces(dataArray, container, mapScale){

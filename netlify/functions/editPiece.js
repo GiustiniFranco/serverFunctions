@@ -20,7 +20,8 @@ exports.handler = async function(event, context){
                 data:{
                     pieceType: body.pieceType,
                     x: body.x,
-                    y: body.y
+                    y: body.y,
+                    name: body.name
                 }
             }
         )
