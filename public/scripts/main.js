@@ -34,7 +34,7 @@ async function Start(){
     );
     CreatePieces(response.data, container, mapScale);
 
-    const coordinatesLabel = new PIXI.Text('This is a PixiJS text',{fontFamily : 'Arial', fontSize: 18, fill : 0xeeeeee, align : 'center'});
+    const coordinatesLabel = new PIXI.Text('',{fontFamily : 'Arial', fontSize: 18, fill : 0xeeeeee, align : 'center'});
     coordinatesLabel.anchor.x = 0.5;
     const labelCont = new PIXI.Container();
     let labelBG = PIXI.Sprite.from('labelBG.png');
@@ -44,24 +44,70 @@ async function Start(){
     app.stage.addChild(labelCont);
 
     app.stage.interactive = true;
-    app.stage.on("pointermove", (e) => UpdateText(e, app, bg, coordinatesLabel, labelCont, labelBG));
+    app.stage.on("pointermove", (e) => UpdateCoordinatesLabel(e, app, bg, coordinatesLabel, labelCont, labelBG));
+
+
+    const piecesLabe = new PIXI.Text('',{fontFamily : 'Arial', fontSize: 18, fill : 0xeeeeee, align : 'left'});
+    piecesLabe.anchor.x = 0;
+    const piecesLabeCont = new PIXI.Container();
+    let plabelBG = PIXI.Sprite.from('labelBG.png');
+    plabelBG.anchor.x = 0;
+    piecesLabeCont.addChild(plabelBG);
+    piecesLabeCont.addChild(piecesLabe);
+    app.stage.addChild(piecesLabeCont);
+
+    app.stage.on("pointerdown", (e) => UpdatePiecesLabel(e, app, bg, piecesLabe, piecesLabeCont, plabelBG));
+
 }
 
-function UpdateText(e, app, bg, label, cont, labelBG){
-    let x = Math.round((e.data.global.x - app.screen.width / 2 + bg.width / 2) * 32 / bg.width);
-    let y = (e.data.global.y - app.screen.height / 2 + bg.height / 2) * 27.5 / bg.height;
+function ScreenPosToCoordinates(pos, app, bg){
+    let x = Math.round((pos.x - app.screen.width / 2 + bg.width / 2) * 32 / bg.width);
+    let y = (pos.y - app.screen.height / 2 + bg.height / 2) * 27.5 / bg.height;
 
     if(x % 2 != 0){
         y -= 0.5;
     }
     y = Math.round(y);
-    label.text = "(" + x + "; " + y + ")";
+
+    return{x:x,y:y};
+}
+
+function UpdateCoordinatesLabel(e, app, bg, label, cont, labelBG){
+    let coor = ScreenPosToCoordinates(e.data.global, app, bg);
+
+    label.text = "(" + coor.x + "; " + coor.y + ")";
 
     cont.x = e.data.global.x;
     cont.y = e.data.global.y - 35;
     labelBG.width = label.width;
     labelBG.height = label.height;
 }
+
+function UpdatePiecesLabel(e, app, bg, label, cont, labelBG){
+    let coor = ScreenPosToCoordinates(e.data.global, app, bg);
+    let x = coor.x;
+    let y = coor.y;
+    if(pieces[x] !== undefined && pieces[x][y] !== undefined){
+        label.text = "";
+        let p = pieces[x][y];
+        for(let i = 0; i < p.length; i++){
+            label.text += p[i].name;
+            if(i < p.length - 1){
+                label.text += "\n";
+            }
+        }
+        cont.visible = true;
+        cont.x = e.data.global.x;
+        cont.y = e.data.global.y + 35;
+        labelBG.width = label.width;
+        labelBG.height = label.height;
+    }
+    else{
+        cont.visible = false;
+    }
+}
+
+var pieces = [];
 
 function CreatePieces(dataArray, container, mapScale){
     for(let i = 0; i < dataArray.length; i++){
@@ -78,11 +124,22 @@ function CreatePieces(dataArray, container, mapScale){
         piece.width = piece.height = mapScale / pieceSize;
         let x = pieceData.x;
         let y = pieceData.y
+        
+        if(pieces[x] === undefined){
+            pieces[x] = [];
+        }
+        if(pieces[x][y] === undefined){
+            pieces[x][y] = [];
+        }
+        pieces[x][y].push(pieceData);
+
         if(x % 2 != 0){
             y += 0.5;
         }
         piece.x = (mapScale / 32) * x;
         piece.y = (mapScale / 27.5) * y;
         container.addChild(piece);
+
     }
+    console.log(pieces)
 }

@@ -25,7 +25,8 @@ async function LoadPieces(){
             id: data.ref["@ref"].id,
             pieceType: data.data.pieceType,
             x: data.data.x,
-            y: data.data.y
+            y: data.data.y,
+            name: data.data.name
         };
         pieces.push(newPiece);
         

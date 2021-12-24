@@ -16,7 +16,7 @@ exports.handler = async function(){
                     pieceType: 0,
                     x: 0,
                     y: 0,
-                    name: ""
+                    name: "undefined"
                 },
             },
         )
