@@ -10,7 +10,7 @@ exports.handler = async function(){
 
     return client.query(
         q.Map(
-            q.Paginate(q.Documents(q.Collection('mapData'))),
+            q.Paginate(q.Documents(q.Collection('mapData')), {size: 100000}),
             q.Lambda((x) => q.Get(x))
         )
     )
