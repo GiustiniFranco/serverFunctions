@@ -82,6 +82,10 @@
               unityInstance.SetFullscreen(1);
             };
           }
+		  
+		canvas.width = canvas.clientWidth * window.devicePixelRatio;
+
+		canvas.height = canvas.clientHeight * window.devicePixelRatio;
         }).catch((message) => {
           alert(message);
         });
