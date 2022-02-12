@@ -7,9 +7,14 @@
     <title>easterEggHunter</title>
     <link rel="shortcut icon" href="TemplateData/favicon.ico">
     <link rel="stylesheet" href="TemplateData/style.css">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.0/jquery.min.js"></script>
+    <script src="unity-webview.js"></script>
   </head>
   <body class="dark">
+  	    <iframe id="google-form" src="https://docs.google.com/forms/d/e/1FAIpQLSdAZVBhVShUoGap21S7UrHwQVSggC5P50tyRPQ7fpUNgqrcrw/viewform?embedded=true" style="width:100%; height:100%; border:none; position:absolute; background-color:#242322"></iframe>
+
     <div id="unity-container" class="unity-desktop">
+
       <canvas id="unity-canvas"></canvas>
     </div>
     <div id="loading-cover" style="display:none;">
@@ -23,7 +28,7 @@
     </div>
     <div id="unity-fullscreen-button" style="display: none;"></div>
     <script>
-      const hideFullScreenButton = "";
+      const hideFullScreenButton = "true";
       const buildUrl = "Build";
       const loaderUrl = buildUrl + "/Build.loader.js";
       const config = {
@@ -43,6 +48,9 @@
       const progressBarFull = document.querySelector("#unity-progress-bar-full");
       const fullscreenButton = document.querySelector("#unity-fullscreen-button");
       const spinner = document.querySelector('.spinner');
+	  const f = document.querySelector("#google-form");
+	  
+	  f.hidden = true;
 
       const canFullscreen = (function() {
         for (const key of [
@@ -73,6 +81,7 @@
           progressBarEmpty.style.display = "";
           progressBarFull.style.width = `${100 * progress}%`;
         }).then((unityInstance) => {
+          window.unityInstance = unityInstance;
           loadingCover.style.display = "none";
           if (canFullscreen) {
             if (!hideFullScreenButton) {
@@ -91,6 +100,10 @@
         });
       };
       document.body.appendChild(script);
+	  
+	  function receiveMessageFromUnity(){
+		f.hidden = false;
+	  }
     </script>
   </body>
 </html>
