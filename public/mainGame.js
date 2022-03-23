@@ -46,7 +46,7 @@ script.onload = () => {
     createUnityInstance(canvas, config, (progress) => {
         spinner.style.display = "none";
         progressBarEmpty.style.display = "";
-        progressBarFull.style.width = '${100 * progress}%';
+        progressBarFull.style.width = `${100 * progress}%`;
     }).then((unityInstance) => {
         window.unityInstance = unityInstance;
         loadingCover.style.display = "none";
@@ -190,6 +190,28 @@ function SubmitNewUserData(userData){
 function FetchMerchLink(){
     return texts.merchLink;
 }
+
 function FetchLoginPrompt(){
     return texts.loginnPrompt;
+}
+
+function FetchTermsLink(){
+    return texts.termsLink;
+}
+
+function GoogleButtonPos(val){
+    googleLoginButton.style.top = val;
+}
+
+var originalGoogleButtonClick;
+
+function ToggleLoginBlock(block){
+    if(block === true){
+        if(typeof originalGoogleButtonClick === 'undefined'){
+            originalGoogleButtonClick =  googleLoginButton.firstChild.onclick;
+        }
+        googleLoginButton.firstChild.onclick = false;
+    }else{
+        googleLoginButton.firstChild.onclick = originalGoogleButtonClick;
+    }
 }
