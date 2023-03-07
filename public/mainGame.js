@@ -17,7 +17,7 @@ const progressBarEmpty = document.querySelector("#unity-progress-bar-empty");
 const progressBarFull = document.querySelector("#unity-progress-bar-full");
 const fullscreenButton = document.querySelector("#unity-fullscreen-button");
 const spinner = document.querySelector('.spinner');
-const googleLoginButton = document.querySelector('.g-signin2');
+const googleLoginButton = document.querySelector('.g_id_signin');
 
 const canFullscreen = (function() {
     for (const key of [
@@ -67,14 +67,28 @@ document.body.appendChild(script);
 var gUser;
 
 function onSignIn(googleUser) {
-    let p = googleUser.getBasicProfile();
+	let p = parseJwt(googleUser.credential);
+	console.log(p);
     gUser = {};
-    gUser.id = p.getId();
-    gUser.name = p.getGivenName();
-    gUser.lastName = p.getFamilyName();
-    gUser.email = p.getEmail();
+    gUser.id = p.sub;
+    gUser.name = p.given_name;
+    gUser.lastName = p.family_name;
+    gUser.email = p.email;
+	console.log(gUser);
     RequestLoginData();
+	container.focus();
 }
+
+function parseJwt (token) {
+    var base64Url = token.split('.')[1];
+    var base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    var jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function(c) {
+        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+    }).join(''));
+
+    return JSON.parse(jsonPayload);
+}
+
 
 function RequestLoginData(){
     if(typeof window.unityInstance !== 'undefined'){
@@ -203,15 +217,16 @@ function GoogleButtonPos(val){
     googleLoginButton.style.top = val;
 }
 
-var originalGoogleButtonClick;
+var originalGoogleButtonPointerEvent;
 
 function ToggleLoginBlock(block){
-    if(block === true){
-        if(typeof originalGoogleButtonClick === 'undefined'){
-            originalGoogleButtonClick =  googleLoginButton.firstChild.onclick;
-        }
-        googleLoginButton.firstChild.onclick = false;
-    }else{
-        googleLoginButton.firstChild.onclick = originalGoogleButtonClick;
+	if(typeof originalGoogleButtonPointerEvent === 'undefined'){
+		originalGoogleButtonPointerEvent =googleLoginButton.style.pointerEvents;
     }
+	if(block){
+		googleLoginButton.style.pointerEvents = "none"
+	}
+	else{
+		googleLoginButton.style.pointerEvents = originalGoogleButtonPointerEvent;
+	}
 }

@@ -7,10 +7,26 @@
     <title>Zelda Easter Egg Hunt</title>
     <link rel="shortcut icon" href="faviconGame.ico">
     <link rel="stylesheet" href="styleGame.css">
-    <meta name="google-signin-client_id" content="277721302122-o78qhtgf3k18ebnh8sv0ke68g7b75b2k.apps.googleusercontent.com">
   </head>
   <body class="dark">
-    <div class="g-signin2" data-onsuccess="onSignIn"style="display: none;position:absolute; left:50%;top:84%; transform:translate(-50%,-50%);"></div>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+	<div id="g_id_onload"
+		data-client_id="277721302122-o78qhtgf3k18ebnh8sv0ke68g7b75b2k.apps.googleusercontent.com"
+		data-context="signin"
+		data-ux_mode="popup"
+		data-callback="onSignIn"
+		data-auto_select="true"
+		data-auto_prompt="false">
+	</div>
+	<div class="g_id_signin"
+		data-type="standard"
+		data-shape="rectangular"
+		data-theme="outline"
+		data-text="signin_with"
+		data-size="large"
+		data-logo_alignment="left"
+		style="display: none;position:absolute; left:50%;top:85%; transform:translate(-50%,-50%);">
+	</div>
     <div id="unity-container" class="unity-desktop">
       <canvas id="unity-canvas"></canvas>
       </div>
@@ -24,28 +40,10 @@
     </div>
     </div>
     <div id="unity-fullscreen-button" style="display: none;"></div>
-    <script src="https://apis.google.com/js/platform.js" async defer></script>
     <script src="//cdn.jsdelivr.net/npm/faunadb@latest/dist/faunadb-min.js"></script>
     <script src="textsGame.js"></script>
     <script src="mainGame.js"></script>
 	
-      <script src="https://accounts.google.com/gsi/client" async defer></script>
-	<div id="g_id_onload"
-     data-client_id="277721302122-o78qhtgf3k18ebnh8sv0ke68g7b75b2k.apps.googleusercontent.com"
-     data-context="signin"
-     data-ux_mode="popup"
-     data-login_uri="https://cdn.shopify.com/s/files/1/0857/5448/t/8/assets/indexGamev2.html"
-     data-auto_prompt="false">
-</div>
 
-<div class="g_id_signin"
-     data-type="standard"
-     data-shape="rectangular"
-     data-theme="outline"
-     data-text="signin_with"
-     data-size="large"
-     data-logo_alignment="left"
-	 style="display: none;position:absolute; left:50%;top:84%; transform:translate(-50%,-50%);">
-</div>
   </body>
 </html>
