@@ -1,9 +1,9 @@
 const hideFullScreenButton = "true";
-const loaderUrl = "Build.loader.js";
+const loaderUrl = "https://giustinifranco.github.io/serverFunctions/public/ZeldaEasterEgg/Build.loader.js";
 const config = {
-    dataUrl: "Build.data",
-    frameworkUrl: "Build.framework.js",
-    codeUrl: "Build.wasm",
+    dataUrl: "https://giustinifranco.github.io/serverFunctions/public/ZeldaEasterEgg/Build.data",
+    frameworkUrl: "https://giustinifranco.github.io/serverFunctions/public/ZeldaEasterEgg/Build.framework.js",
+    codeUrl: "https://giustinifranco.github.io/serverFunctions/public/ZeldaEasterEgg/Build.wasm",
     streamingAssetsUrl: "StreamingAssets",
     companyName: "DefaultCompany",
     productName: "easterEggHunter",
