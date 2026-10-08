@@ -54,7 +54,7 @@
         }
 
         document.getElementById('connectBtn').addEventListener('click', () => {
-            const ip = document.getElementById('serverIp'].value.trim();
+            const ip = document.getElementById('serverIp').value.trim();
             if (!ip) { alert('Enter valid IP'); return; }
             ws = new WebSocket(`ws://${ip}:8080/ws/`);
             ws.onopen = () => { statusDiv.style.color = '#44ff44'; statusDiv.innerText = 'Connected to PC'; };
