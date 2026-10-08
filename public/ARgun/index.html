@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>PC Touch PWA - Marker Tracker</title>
+    <title>PC Touch PWA - Robust Tracker</title>
     <link rel="manifest" href="manifest.json">
     <style>
         body, html { margin: 0; padding: 0; overflow: hidden; background: #000; width: 100%; height: 100%; touch-action: none; }
@@ -37,7 +37,13 @@
         async function startCamera() {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: 'environment', frameRate: { ideal: 60, min: 30 } }
+                    video: { 
+                        facingMode: 'environment', 
+                        frameRate: { ideal: 60, min: 30 },
+                        // Request manual/advanced constraints if supported by browser
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    }
                 });
                 video.srcObject = stream;
                 video.onloadedmetadata = () => {
@@ -68,36 +74,61 @@
         function scanMarkers(imgData, width, height) {
             let found = {};
             const data = imgData.data;
-            const step = 6;
+            const step = 8; // Scanning step for high performance
 
-            for (let y = 20; y < height - 20; y += step) {
-                for (let x = 20; x < width - 20; x += step) {
+            for (let y = 30; y < height - 30; y += step) {
+                for (let x = 30; x < width - 30; x += step) {
                     let idx = (y * width + x) * 4;
-                    if (data[idx] < 60 && data[idx+1] < 60 && data[idx+2] < 60) {
-                        let mSize = 90;
+                    // Quick check for dark pixel cluster candidate
+                    if (data[idx] < 80 && data[idx+1] < 80 && data[idx+2] < 80) {
+                        let mSize = 100;
                         let cellSz = mSize / 5;
                         let startX = x - mSize / 2;
                         let startY = y - mSize / 2;
 
+                        // Step 1: Extract 25 cell brightness values and calculate local average (Dynamic Threshold)
+                        let cellBrightnesses = [];
+                        let totalB = 0;
+                        let validCells = true;
+
+                        for (let r = 0; r < 5; r++) {
+                            for (let c = 0; c < 5; c++) {
+                                let pxCoordX = Math.floor(startX + (c + 0.5) * cellSz);
+                                let pxCoordY = Math.floor(startY + (r + 0.5) * cellSz);
+                                if (pxCoordX < 0 || pxCoordX >= width || pxCoordY < 0 || pxCoordY >= height) {
+                                    validCells = false;
+                                    break;
+                                }
+                                let pIdx = (pxCoordY * width + pxCoordX) * 4;
+                                let b = (data[pIdx] + data[pIdx+1] + data[pIdx+2]) / 3;
+                                cellBrightnesses.push(b);
+                                totalB += b;
+                            }
+                            if (!validCells) break;
+                        }
+
+                        if (!validCells) continue;
+
+                        let localThreshold = totalB / 25;
+
+                        // Step 2: Test against known signatures using the local threshold
                         for (let id in markerSignatures) {
                             let sig = markerSignatures[id];
-                            let matchedCells = 0;
-                            let totalCells = 0;
+                            let matches = 0;
+                            let index = 0;
+
                             for (let r = 0; r < 5; r++) {
                                 for (let c = 0; c < 5; c++) {
-                                    let pxCoordX = Math.floor(startX + (c + 0.5) * cellSz);
-                                    let pxCoordY = Math.floor(startY + (r + 0.5) * cellSz);
-                                    if (pxCoordX >= 0 && pxCoordX < width && pxCoordY >= 0 && pxCoordY < height) {
-                                        let pIdx = (pxCoordY * width + pxCoordX) * 4;
-                                        let brightness = (data[pIdx] + data[pIdx+1] + data[pIdx+2]) / 3;
-                                        let isWhite = brightness > 128 ? 1 : 0;
-                                        if (isWhite === sig[r][c]) matchedCells++;
-                                        totalCells++;
+                                    let isWhite = cellBrightnesses[index] > localThreshold ? 1 : 0;
+                                    if (isWhite === sig[r][c]) {
+                                        matches++;
                                     }
+                                    index++;
                                 }
                             }
 
-                            if (totalCells > 20 && (matchedCells / totalCells) > 0.82) {
+                            // 84% accuracy match threshold to tolerate bloom distortion
+                            if ((matches / 25) >= 0.84) {
                                 found[id] = { x: x, y: y };
                                 break;
                             }
@@ -140,7 +171,6 @@
             requestAnimationFrame(processLoop);
         }
 
-        // Calculate Normalized 0-1 Coordinates relative to detected marker frame
         function getNormalizedTouch(px, py, m) {
             const minX = Math.min(m[0].x, m[2].x);
             const maxX = Math.max(m[1].x, m[3].x);
@@ -163,7 +193,6 @@
             const touchY = (e.clientY - rect.top) * scaleY;
 
             const { u, v } = getNormalizedTouch(touchX, touchY, detectedMarkers);
-            // Send normalized float coordinates (0.0 to 1.0)
             ws.send(`${u.toFixed(4)},${v.toFixed(4)}`);
         });
 
