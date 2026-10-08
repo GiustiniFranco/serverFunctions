@@ -3,8 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>PC Touch PWA - Robust Tracker</title>
+    <title>PC Touch PWA - OpenCV ArUco</title>
     <link rel="manifest" href="manifest.json">
+    <!-- Load official OpenCV ArUco JavaScript Port Libraries via CDN -->
+    <script src="https://cdn.jsdelivr.net/gh/jcmellado/js-aruco/src/cv.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/jcmellado/js-aruco/src/aruco.js"></script>
     <style>
         body, html { margin: 0; padding: 0; overflow: hidden; background: #000; width: 100%; height: 100%; touch-action: none; }
         video { display: none; }
@@ -22,7 +25,7 @@
     <div id="ui">
         <input type="text" id="serverIp" placeholder="PC IP (e.g. 192.168.1.50)"><br>
         <button id="connectBtn">Connect</button>
-        <div id="status">Disconnected / Searching Markers</div>
+        <div id="status">Disconnected / Searching ArUco Markers</div>
     </div>
 
     <script>
@@ -32,18 +35,13 @@
         const statusDiv = document.getElementById('status');
 
         let ws = null;
-        let detectedMarkers = {};
+        let detector = new AR.Detector(); // Native OpenCV ArUco Detector pipeline
+        let screenCorners = null;
 
         async function startCamera() {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { 
-                        facingMode: 'environment', 
-                        frameRate: { ideal: 60, min: 30 },
-                        // Request manual/advanced constraints if supported by browser
-                        width: { ideal: 1280 },
-                        height: { ideal: 720 }
-                    }
+                    video: { facingMode: 'environment', frameRate: { ideal: 60, min: 30 } }
                 });
                 video.srcObject = stream;
                 video.onloadedmetadata = () => {
@@ -56,88 +54,13 @@
         }
 
         document.getElementById('connectBtn').addEventListener('click', () => {
-            const ip = document.getElementById('serverIp').value.trim();
+            const ip = document.getElementById('serverIp'].value.trim();
             if (!ip) { alert('Enter valid IP'); return; }
             ws = new WebSocket(`ws://${ip}:8080/ws/`);
             ws.onopen = () => { statusDiv.style.color = '#44ff44'; statusDiv.innerText = 'Connected to PC'; };
             ws.onclose = () => { statusDiv.style.color = '#ff4444'; statusDiv.innerText = 'Disconnected'; };
             ws.onerror = () => { statusDiv.style.color = '#ff4444'; statusDiv.innerText = 'Connection Error'; };
         });
-
-        const markerSignatures = {
-            0: [[0,0,0,0,0],[0,1,0,1,0],[0,0,1,0,0],[0,1,1,1,0],[0,0,0,0,0]], // Top-Left
-            1: [[0,0,0,0,0],[0,1,1,1,0],[0,0,1,0,0],[0,1,0,1,0],[0,0,0,0,0]], // Top-Right
-            2: [[0,0,0,0,0],[0,0,1,0,0],[0,1,1,1,0],[0,0,1,0,0],[0,0,0,0,0]], // Bottom-Left
-            3: [[0,0,0,0,0],[0,1,1,1,0],[0,1,0,1,0],[0,1,1,1,0],[0,0,0,0,0]]  // Bottom-Right
-        };
-
-        function scanMarkers(imgData, width, height) {
-            let found = {};
-            const data = imgData.data;
-            const step = 8; // Scanning step for high performance
-
-            for (let y = 30; y < height - 30; y += step) {
-                for (let x = 30; x < width - 30; x += step) {
-                    let idx = (y * width + x) * 4;
-                    // Quick check for dark pixel cluster candidate
-                    if (data[idx] < 80 && data[idx+1] < 80 && data[idx+2] < 80) {
-                        let mSize = 100;
-                        let cellSz = mSize / 5;
-                        let startX = x - mSize / 2;
-                        let startY = y - mSize / 2;
-
-                        // Step 1: Extract 25 cell brightness values and calculate local average (Dynamic Threshold)
-                        let cellBrightnesses = [];
-                        let totalB = 0;
-                        let validCells = true;
-
-                        for (let r = 0; r < 5; r++) {
-                            for (let c = 0; c < 5; c++) {
-                                let pxCoordX = Math.floor(startX + (c + 0.5) * cellSz);
-                                let pxCoordY = Math.floor(startY + (r + 0.5) * cellSz);
-                                if (pxCoordX < 0 || pxCoordX >= width || pxCoordY < 0 || pxCoordY >= height) {
-                                    validCells = false;
-                                    break;
-                                }
-                                let pIdx = (pxCoordY * width + pxCoordX) * 4;
-                                let b = (data[pIdx] + data[pIdx+1] + data[pIdx+2]) / 3;
-                                cellBrightnesses.push(b);
-                                totalB += b;
-                            }
-                            if (!validCells) break;
-                        }
-
-                        if (!validCells) continue;
-
-                        let localThreshold = totalB / 25;
-
-                        // Step 2: Test against known signatures using the local threshold
-                        for (let id in markerSignatures) {
-                            let sig = markerSignatures[id];
-                            let matches = 0;
-                            let index = 0;
-
-                            for (let r = 0; r < 5; r++) {
-                                for (let c = 0; c < 5; c++) {
-                                    let isWhite = cellBrightnesses[index] > localThreshold ? 1 : 0;
-                                    if (isWhite === sig[r][c]) {
-                                        matches++;
-                                    }
-                                    index++;
-                                }
-                            }
-
-                            // 84% accuracy match threshold to tolerate bloom distortion
-                            if ((matches / 25) >= 0.84) {
-                                found[id] = { x: x, y: y };
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
-            return Object.keys(found).length === 4 ? found : null;
-        }
 
         function processLoop() {
             if (video.readyState === video.HAVE_ENOUGH_DATA) {
@@ -146,32 +69,46 @@
                 
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
                 
-                const frameData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                const markers = scanMarkers(frameData, canvas.width, canvas.height);
+                // Pass raw frame ImageData directly to OpenCV ArUco detector
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                const markers = detector.detect(imageData); // OpenCV ArUco detection
 
-                if (markers) {
-                    detectedMarkers = markers;
-                    statusDiv.innerText = 'All 4 Markers Locked (Ready)';
-                    statusDiv.style.color = '#44ff44';
+                if (markers && markers.length === 4) {
+                    let found = {};
+                    markers.forEach(m => {
+                        let cx = (m.corners[0].x + m.corners[1].x + m.corners[2].x + m.corners[3].x) / 4;
+                        let cy = (m.corners[0].y + m.corners[1].y + m.corners[2].y + m.corners[3].y) / 4;
+                        found[m.id] = { x: cx, y: cy };
+                    });
 
-                    ctx.strokeStyle = '#00ff00';
-                    ctx.lineWidth = 4;
-                    ctx.beginPath();
-                    ctx.moveTo(markers[0].x, markers[0].y);
-                    ctx.lineTo(markers[1].x, markers[1].y);
-                    ctx.lineTo(markers[3].x, markers[3].y);
-                    ctx.lineTo(markers[2].x, markers[2].y);
-                    ctx.closePath();
-                    ctx.stroke();
+                    // Ensure markers 0, 1, 2, and 3 are successfully identified
+                    if (found[0] && found[1] && found[2] && found[3]) {
+                        screenCorners = found;
+                        statusDiv.innerText = 'ArUco Markers Locked (OpenCV Engine)';
+                        statusDiv.style.color = '#44ff44';
+
+                        ctx.strokeStyle = '#00ff00';
+                        ctx.lineWidth = 4;
+                        ctx.beginPath();
+                        ctx.moveTo(found[0].x, found[0].y);
+                        ctx.lineTo(found[1].x, found[1].y);
+                        ctx.lineTo(found[3].x, found[3].y);
+                        ctx.lineTo(found[2].x, found[2].y);
+                        ctx.closePath();
+                        ctx.stroke();
+                    } else {
+                        statusDiv.innerText = 'Markers found, but missing IDs (0-3)';
+                        statusDiv.style.color = '#ffaa00';
+                    }
                 } else {
-                    statusDiv.innerText = 'Searching for PC Screen Markers...';
+                    statusDiv.innerText = `Searching for ArUco Markers (${markers ? markers.length : 0}/4)...`;
                     statusDiv.style.color = '#ffaa00';
                 }
             }
             requestAnimationFrame(processLoop);
         }
 
-        function getNormalizedTouch(px, py, m) {
+        function mapTouchToNormalized(px, py, m) {
             const minX = Math.min(m[0].x, m[2].x);
             const maxX = Math.max(m[1].x, m[3].x);
             const minY = Math.min(m[0].y, m[1].y);
@@ -184,7 +121,7 @@
         }
 
         canvas.addEventListener('pointerdown', (e) => {
-            if (!ws || ws.readyState !== WebSocket.OPEN || Object.keys(detectedMarkers).length < 4) return;
+            if (!ws || ws.readyState !== WebSocket.OPEN || !screenCorners) return;
 
             const rect = canvas.getBoundingClientRect();
             const scaleX = canvas.width / rect.width;
@@ -192,7 +129,7 @@
             const touchX = (e.clientX - rect.left) * scaleX;
             const touchY = (e.clientY - rect.top) * scaleY;
 
-            const { u, v } = getNormalizedTouch(touchX, touchY, detectedMarkers);
+            const { u, v } = mapTouchToNormalized(touchX, touchY, screenCorners);
             ws.send(`${u.toFixed(4)},${v.toFixed(4)}`);
         });
 
