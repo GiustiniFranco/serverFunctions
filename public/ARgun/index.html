@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>PC Touch PWA - Ultrawide ArUco</title>
+    <title>PC Touch PWA - Advanced Camera</title>
     <link rel="manifest" href="manifest.json">
     <script src="https://cdn.jsdelivr.net/gh/jcmellado/js-aruco/src/cv.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/jcmellado/js-aruco/src/aruco.js"></script>
@@ -11,7 +11,7 @@
         body, html { margin: 0; padding: 0; overflow: hidden; background: #000; width: 100%; height: 100%; touch-action: none; }
         video { display: none; }
         canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }
-        #ui { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 20; background: rgba(0,0,0,0.85); padding: 12px; border-radius: 10px; color: white; font-family: sans-serif; text-align: center; width: 260px; }
+        #ui { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 20; background: rgba(0,0,0,0.85); padding: 12px; border-radius: 10px; color: white; font-family: sans-serif; text-align: center; width: 280px; }
         select, input[type="text"] { width: 100%; box-sizing: border-box; padding: 8px; margin-bottom: 8px; border-radius: 6px; border: 1px solid #444; background: #222; color: #fff; text-align: center; font-size: 13px; }
         .slider-container { display: none; margin-bottom: 8px; text-align: left; font-size: 12px; color: #aaa; }
         input[type="range"] { width: 100%; margin-top: 4px; }
@@ -25,12 +25,12 @@
     
     <div id="ui">
         <select id="cameraSelect">
-            <option value="">Loading cameras...</option>
+            <option value="">Requesting Camera Access...</option>
         </select>
         
         <div id="zoomContainer" class="slider-container">
             <label for="zoomSlider">Hardware Zoom (<span id="zoomVal">1x</span>)</label>
-            <input type="range" id="zoomSlider" min="1" max="1" step="0.1" value="1">
+            <input type="range" id="zoomSlider" step="0.1" value="1">
         </div>
 
         <input type="text" id="serverIp" placeholder="PC IP (e.g. 192.168.1.50)">
@@ -54,6 +54,7 @@
         let currentStream = null;
         let videoTrack = null;
 
+        // Aggressively hunt for all video devices
         async function populateCameraDropdown() {
             try {
                 const devices = await navigator.mediaDevices.enumerateDevices();
@@ -63,7 +64,8 @@
                 videoDevices.forEach((device, index) => {
                     const option = document.createElement('option');
                     option.value = device.deviceId;
-                    option.text = device.label || `Camera ${index + 1}`;
+                    // Browsers sometimes hide labels. We force a generic name if missing.
+                    option.text = device.label || `Hidden Lens ${index + 1} (${device.deviceId.substring(0,5)}...)`;
                     cameraSelect.appendChild(option);
                 });
             } catch (err) {
@@ -76,10 +78,12 @@
                 currentStream.getTracks().forEach(track => track.stop());
             }
 
+            // Explicitly request PTZ (Pan/Tilt/Zoom) to force browser to unlock ultrawide logic
             const videoConstraints = {
                 width: { ideal: 1280 },
                 height: { ideal: 720 },
-                frameRate: { ideal: 60, min: 30 }
+                frameRate: { ideal: 60, min: 30 },
+                zoom: true // THIS is the crucial flag for modern browsers
             };
 
             if (deviceId) {
@@ -98,10 +102,23 @@
                     setupZoomSlider();
                 };
 
+                // Populate the dropdown only after permissions are fully granted
                 if (!deviceId) await populateCameraDropdown();
                 if (deviceId) cameraSelect.value = deviceId;
+                
             } catch (err) {
-                alert('Camera error: ' + err.message);
+                // Fallback if the browser strictly rejects the 'zoom: true' constraint
+                if (err.name === 'OverconstrainedError' || err.name === 'TypeError') {
+                    console.warn("Browser rejected PTZ, retrying without zoom constraint...");
+                    delete videoConstraints.zoom;
+                    currentStream = await navigator.mediaDevices.getUserMedia({ video: videoConstraints });
+                    video.srcObject = currentStream;
+                    videoTrack = currentStream.getVideoTracks()[0];
+                    video.play();
+                    if (!deviceId) await populateCameraDropdown();
+                } else {
+                    alert('Camera error: ' + err.message);
+                }
             }
         }
 
@@ -109,24 +126,22 @@
             const capabilities = videoTrack.getCapabilities();
             const settings = videoTrack.getSettings();
 
-            // Check if the camera hardware supports zooming
             if (capabilities.zoom) {
                 zoomSlider.min = capabilities.zoom.min;
                 zoomSlider.max = capabilities.zoom.max;
                 zoomSlider.step = capabilities.zoom.step;
-                zoomSlider.value = settings.zoom;
-                zoomVal.innerText = `${settings.zoom}x`;
+                zoomSlider.value = settings.zoom || 1;
+                zoomVal.innerText = `${zoomSlider.value}x`;
                 
                 zoomContainer.style.display = 'block';
 
                 zoomSlider.oninput = async (e) => {
-                    const val = e.target.value;
+                    const val = parseFloat(e.target.value);
                     zoomVal.innerText = `${val}x`;
                     try {
-                        // Apply the hardware zoom constraint (Values < 1.0 engage ultrawide)
                         await videoTrack.applyConstraints({ advanced: [{ zoom: val }] });
                     } catch (err) {
-                        console.error('Zoom not supported:', err);
+                        console.error('Zoom constraint failed:', err);
                     }
                 };
             } else {
