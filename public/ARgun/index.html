@@ -3,9 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>PC Touch PWA - OpenCV ArUco</title>
+    <title>PC Touch PWA - Ultrawide ArUco</title>
     <link rel="manifest" href="manifest.json">
-    <!-- Load official OpenCV ArUco JavaScript Port Libraries via CDN -->
     <script src="https://cdn.jsdelivr.net/gh/jcmellado/js-aruco/src/cv.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/jcmellado/js-aruco/src/aruco.js"></script>
     <style>
@@ -13,8 +12,10 @@
         video { display: none; }
         canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }
         #ui { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 20; background: rgba(0,0,0,0.85); padding: 12px; border-radius: 10px; color: white; font-family: sans-serif; text-align: center; width: 260px; }
-        select, input { width: 100%; box-sizing: border-box; padding: 8px; margin-bottom: 8px; border-radius: 6px; border: 1px solid #444; background: #222; color: #fff; text-align: center; font-size: 13px; }
-        button { width: 100%; padding: 8px 16px; background: #007acc; color: white; border: none; border-radius: 6px; font-weight: bold; font-size: 14px; cursor: pointer; }
+        select, input[type="text"] { width: 100%; box-sizing: border-box; padding: 8px; margin-bottom: 8px; border-radius: 6px; border: 1px solid #444; background: #222; color: #fff; text-align: center; font-size: 13px; }
+        .slider-container { display: none; margin-bottom: 8px; text-align: left; font-size: 12px; color: #aaa; }
+        input[type="range"] { width: 100%; margin-top: 4px; }
+        button { width: 100%; padding: 8px 16px; background: #007acc; color: white; border: none; border-radius: 6px; font-weight: bold; font-size: 14px; cursor: pointer; margin-top: 5px; }
         #status { font-size: 11px; margin-top: 6px; color: #ff4444; }
     </style>
 </head>
@@ -26,6 +27,12 @@
         <select id="cameraSelect">
             <option value="">Loading cameras...</option>
         </select>
+        
+        <div id="zoomContainer" class="slider-container">
+            <label for="zoomSlider">Hardware Zoom (<span id="zoomVal">1x</span>)</label>
+            <input type="range" id="zoomSlider" min="1" max="1" step="0.1" value="1">
+        </div>
+
         <input type="text" id="serverIp" placeholder="PC IP (e.g. 192.168.1.50)">
         <button id="connectBtn">Connect</button>
         <div id="status">Disconnected / Searching ArUco Markers</div>
@@ -37,11 +44,15 @@
         const ctx = canvas.getContext('2d', { willReadFrequently: true });
         const statusDiv = document.getElementById('status');
         const cameraSelect = document.getElementById('cameraSelect');
+        const zoomContainer = document.getElementById('zoomContainer');
+        const zoomSlider = document.getElementById('zoomSlider');
+        const zoomVal = document.getElementById('zoomVal');
 
         let ws = null;
         let detector = new AR.Detector();
         let screenCorners = null;
         let currentStream = null;
+        let videoTrack = null;
 
         async function populateCameraDropdown() {
             try {
@@ -61,12 +72,10 @@
         }
 
         async function startCamera(deviceId = null) {
-            // Clean up existing camera stream
             if (currentStream) {
                 currentStream.getTracks().forEach(track => track.stop());
             }
 
-            // Anti-blur high framerate & resolution constraints
             const videoConstraints = {
                 width: { ideal: 1280 },
                 height: { ideal: 720 },
@@ -82,17 +91,46 @@
             try {
                 currentStream = await navigator.mediaDevices.getUserMedia({ video: videoConstraints });
                 video.srcObject = currentStream;
+                videoTrack = currentStream.getVideoTracks()[0];
                 
                 video.onloadedmetadata = () => {
                     video.play();
+                    setupZoomSlider();
                 };
 
-                await populateCameraDropdown();
-                if (deviceId) {
-                    cameraSelect.value = deviceId;
-                }
+                if (!deviceId) await populateCameraDropdown();
+                if (deviceId) cameraSelect.value = deviceId;
             } catch (err) {
                 alert('Camera error: ' + err.message);
+            }
+        }
+
+        function setupZoomSlider() {
+            const capabilities = videoTrack.getCapabilities();
+            const settings = videoTrack.getSettings();
+
+            // Check if the camera hardware supports zooming
+            if (capabilities.zoom) {
+                zoomSlider.min = capabilities.zoom.min;
+                zoomSlider.max = capabilities.zoom.max;
+                zoomSlider.step = capabilities.zoom.step;
+                zoomSlider.value = settings.zoom;
+                zoomVal.innerText = `${settings.zoom}x`;
+                
+                zoomContainer.style.display = 'block';
+
+                zoomSlider.oninput = async (e) => {
+                    const val = e.target.value;
+                    zoomVal.innerText = `${val}x`;
+                    try {
+                        // Apply the hardware zoom constraint (Values < 1.0 engage ultrawide)
+                        await videoTrack.applyConstraints({ advanced: [{ zoom: val }] });
+                    } catch (err) {
+                        console.error('Zoom not supported:', err);
+                    }
+                };
+            } else {
+                zoomContainer.style.display = 'none';
             }
         }
 
