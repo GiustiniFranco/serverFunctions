@@ -12,9 +12,9 @@
         body, html { margin: 0; padding: 0; overflow: hidden; background: #000; width: 100%; height: 100%; touch-action: none; }
         video { display: none; }
         canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }
-        #ui { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 20; background: rgba(0,0,0,0.85); padding: 12px; border-radius: 10px; color: white; font-family: sans-serif; text-align: center; }
-        input { width: 160px; padding: 6px; margin-bottom: 6px; border-radius: 4px; border: none; text-align: center; }
-        button { padding: 6px 16px; background: #007acc; color: white; border: none; border-radius: 4px; font-weight: bold; }
+        #ui { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 20; background: rgba(0,0,0,0.85); padding: 12px; border-radius: 10px; color: white; font-family: sans-serif; text-align: center; width: 260px; }
+        select, input { width: 100%; box-sizing: border-box; padding: 8px; margin-bottom: 8px; border-radius: 6px; border: 1px solid #444; background: #222; color: #fff; text-align: center; font-size: 13px; }
+        button { width: 100%; padding: 8px 16px; background: #007acc; color: white; border: none; border-radius: 6px; font-weight: bold; font-size: 14px; cursor: pointer; }
         #status { font-size: 11px; margin-top: 6px; color: #ff4444; }
     </style>
 </head>
@@ -23,7 +23,10 @@
     <canvas id="output"></canvas>
     
     <div id="ui">
-        <input type="text" id="serverIp" placeholder="PC IP (e.g. 192.168.1.50)"><br>
+        <select id="cameraSelect">
+            <option value="">Loading cameras...</option>
+        </select>
+        <input type="text" id="serverIp" placeholder="PC IP (e.g. 192.168.1.50)">
         <button id="connectBtn">Connect</button>
         <div id="status">Disconnected / Searching ArUco Markers</div>
     </div>
@@ -33,25 +36,71 @@
         const canvas = document.getElementById('output');
         const ctx = canvas.getContext('2d', { willReadFrequently: true });
         const statusDiv = document.getElementById('status');
+        const cameraSelect = document.getElementById('cameraSelect');
 
         let ws = null;
-        let detector = new AR.Detector(); // Native OpenCV ArUco Detector pipeline
+        let detector = new AR.Detector();
         let screenCorners = null;
+        let currentStream = null;
 
-        async function startCamera() {
+        async function populateCameraDropdown() {
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: 'environment', frameRate: { ideal: 60, min: 30 } }
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const videoDevices = devices.filter(d => d.kind === 'videoinput');
+                
+                cameraSelect.innerHTML = '';
+                videoDevices.forEach((device, index) => {
+                    const option = document.createElement('option');
+                    option.value = device.deviceId;
+                    option.text = device.label || `Camera ${index + 1}`;
+                    cameraSelect.appendChild(option);
                 });
-                video.srcObject = stream;
+            } catch (err) {
+                console.error('Failed to enumerate cameras:', err);
+            }
+        }
+
+        async function startCamera(deviceId = null) {
+            // Clean up existing camera stream
+            if (currentStream) {
+                currentStream.getTracks().forEach(track => track.stop());
+            }
+
+            // Anti-blur high framerate & resolution constraints
+            const videoConstraints = {
+                width: { ideal: 1280 },
+                height: { ideal: 720 },
+                frameRate: { ideal: 60, min: 30 }
+            };
+
+            if (deviceId) {
+                videoConstraints.deviceId = { exact: deviceId };
+            } else {
+                videoConstraints.facingMode = { ideal: 'environment' };
+            }
+
+            try {
+                currentStream = await navigator.mediaDevices.getUserMedia({ video: videoConstraints });
+                video.srcObject = currentStream;
+                
                 video.onloadedmetadata = () => {
                     video.play();
-                    requestAnimationFrame(processLoop);
                 };
+
+                await populateCameraDropdown();
+                if (deviceId) {
+                    cameraSelect.value = deviceId;
+                }
             } catch (err) {
                 alert('Camera error: ' + err.message);
             }
         }
+
+        cameraSelect.addEventListener('change', (e) => {
+            if (e.target.value) {
+                startCamera(e.target.value);
+            }
+        });
 
         document.getElementById('connectBtn').addEventListener('click', () => {
             const ip = document.getElementById('serverIp').value.trim();
@@ -69,9 +118,8 @@
                 
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
                 
-                // Pass raw frame ImageData directly to OpenCV ArUco detector
                 const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                const markers = detector.detect(imageData); // OpenCV ArUco detection
+                const markers = detector.detect(imageData);
 
                 if (markers && markers.length === 4) {
                     let found = {};
@@ -81,7 +129,6 @@
                         found[m.id] = { x: cx, y: cy };
                     });
 
-                    // Ensure markers 0, 1, 2, and 3 are successfully identified
                     if (found[0] && found[1] && found[2] && found[3]) {
                         screenCorners = found;
                         statusDiv.innerText = 'ArUco Markers Locked (OpenCV Engine)';
@@ -133,7 +180,9 @@
             ws.send(`${u.toFixed(4)},${v.toFixed(4)}`);
         });
 
-        startCamera();
+        startCamera().then(() => {
+            requestAnimationFrame(processLoop);
+        });
 
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('sw.js');
